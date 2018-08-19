@@ -1,0 +1,19 @@
+{
+  "name": "twitter-event-stream",
+  "description": "rhenium/twitter-event-stream",
+  "website": "https://github.com/rhenium/twitter-event-stream",
+  "repository": "https://github.com/rhenium/twitter-event-stream",
+  "env": {
+    "RACK_ENV": "production",
+    "TWITTER_EVENT_STREAM_CONSUMER_KEY": {
+      "description": "A consumer key whitelisted for the Account Activity API."
+    },
+    "TWITTER_EVENT_STREAM_CONSUMER_SECRET": {
+      "description": "A consumer secret."
+    },
+    "TWITTER_EVENT_STREAM_USER_1": {
+      "description": "A JSON object containing credentials for an user '1'.",
+      "required": false
+    }
+  }
+}

@@ -1,0 +1,26 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    mustermann (1.0.3)
+    puma (3.12.0)
+    rack (2.0.5)
+    rack-protection (2.0.3)
+      rack
+    simple_oauth (0.3.1)
+    sinatra (2.0.3)
+      mustermann (~> 1.0)
+      rack (~> 2.0)
+      rack-protection (= 2.0.3)
+      tilt (~> 2.0)
+    tilt (2.0.8)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  puma
+  simple_oauth (~> 0.3.1)
+  sinatra (~> 2.0)
+
+BUNDLED WITH
+   1.16.3
