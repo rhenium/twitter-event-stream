@@ -4,4 +4,6 @@ Service.setup
 
 # Start web app
 require_relative "app"
+
+use Rack::Deflater
 run App
