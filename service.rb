@@ -187,7 +187,11 @@ class Service
         last_max = nil
         while true
           t = Time.now
-          opts = { "count" => 200, "since_id" => last_max ? last_max - 1 : 1 }
+          opts = {
+            "tweet_mode" => "extended",
+            "count" => 200,
+            "since_id" => last_max ? last_max - 1 : 1
+          }
           ret = twitter_get("/1.1/statuses/home_timeline.json", opts)
 
           unless ret.empty?
@@ -199,6 +203,25 @@ class Service
                 ret.pop
               end
             end
+
+            # Fix Tweet object structure so it follows "Compatibility with
+            # additional extended_tweet in payload" mode.
+            # https://developer.twitter.com/en/docs/tweets/tweet-updates.html
+            ret.each { |tweet|
+              tweet["extended_tweet"] = {
+                "full_text" => tweet["full_text"],
+                "display_text_range" => tweet["display_text_range"],
+                "entities" => tweet["entities"],
+                "extended_entities" => tweet["extended_entities"],
+              }
+              tweet["text"] = tweet["full_text"]
+
+              # NOTE: full_text should be removed from tweet, and then
+              # truncated, entities, extended_entities, and display_text_range
+              # should be modified according to the length of full_text. But
+              # this is probably not worth doing as clients will anyway process
+              # extended_tweet only so it can support >140 characters tweets.
+            }
 
             unless ret.empty?
               emit("twitter_event_stream_home_timeline", ret)

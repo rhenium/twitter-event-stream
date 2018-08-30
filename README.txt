@@ -133,7 +133,12 @@ twitter-event-stream opens two endpoints for a client:
      :\r\n\r\n
 
 
-twitter-event-stream uses "OAuth Echo"[3] to authenticate a client, meaning
+In both endpoints, the Tweet object structure BASICALLY follows the
+"Compatibility with additional extended_tweet in payload" mode[3]. Each Tweet
+object has `extended_tweet` object containing `full_text` key.
+
+
+twitter-event-stream uses "OAuth Echo"[4] to authenticate a client, meaning
 an application must provide the following HTTP headers:
 
  - `x-auth-service-provider`
@@ -147,7 +152,8 @@ an application must provide the following HTTP headers:
     normally send when calling the account/verify_credentials API.
 
 [2] https://developer.twitter.com/en/docs/basics/authentication/overview/oauth-echo.html
-[3] https://developer.twitter.com/en/docs/accounts-and-users/subscribe-account-activity/guides/account-activity-data-objects
+[3] https://developer.twitter.com/en/docs/tweets/tweet-updates.html
+[4] https://developer.twitter.com/en/docs/accounts-and-users/subscribe-account-activity/guides/account-activity-data-objects
 
 License
 -------
