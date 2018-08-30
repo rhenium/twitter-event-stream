@@ -1,9 +1,6 @@
 twitter-event-stream
 ====================
 
-*WORK IN PROGRESS: My application for a developer account has not yet been
-approved and the code is not tested at all.*
-
 Description
 -----------
 
@@ -26,11 +23,25 @@ Configuration
 ~~~~~~~~~~~~~
 
  - You have to gain access to (the premium version of) the Account Activity
-   API. A whitelisted consumer key and the consumer secret are specified by
-   environment variables.
+   API, and create a "dev environment". The "dev environment name", the base
+   url where twitter-event-stream is deployed, the whitelisted consumer key,
+   and the consumer secret are specified by environment variables.
 
+     TWITTER_EVENT_STREAM_BASE_URL=<base url>
+     TWITTER_EVENT_STREAM_ENV_NAME=<dev environment name>
      TWITTER_EVENT_STREAM_CONSUMER_KEY=<consumer key>
      TWITTER_EVENT_STREAM_CONSUMER_SECRET=<consumer secret>
+
+   WARNING: twitter-event-stream assumes your dev environment allows only one
+   webhook URL (which is the case for sandbox (free) plan) and removes all the
+   existing webhook URL(s) on startup.
+
+   NOTE: Subscription are limited to a maximum of 15 users per application in
+   the sandbox plan. Because there is no way to clear subscriptions without
+   having the access token of every subscribing user, it is not possible for
+   twitter-event-stream to do that. It may be necessary to re-create the dev
+   environment manually on developer.twitter.com after removing and adding
+   another user to twitter-event-stream.
 
  - Credentials used for fetching home_timeline are stored in environment
    variables named `TWITTER_EVENT_STREAM_USER_<tag>`. `<tag>` may be any
@@ -72,13 +83,6 @@ Deployment
 
    * The quickest way to deploy twitter-event-stream would be to use Heroku.
      Click the link and fill forms: https://heroku.com/deploy
-
- - Run `setup-webhook.rb` to register a webhook and perform the Challenge
-   Response Check required to activate it. The web application must be
-   already started. Note that `setup-webhook.rb` also requires the
-   environment variables to be set correctly.
-
-   * twitter-event-stream will receive webhooks at /webhook.
 
 Usage
 -----

@@ -5,11 +5,21 @@
   "repository": "https://github.com/rhenium/twitter-event-stream",
   "env": {
     "RACK_ENV": "production",
+    "TWITTER_EVENT_STREAM_BASE_URL": {
+      "description": "The URL where twitter-event-stream is deployed.",
+      "value": "https://<app name>.herokuapp.com/"
+    },
+    "TWITTER_EVENT_STREAM_ENV_NAME": {
+      "description": "The \"dev environment\" for the Account Activity API.",
+      "value": "<env name>"
+    },
     "TWITTER_EVENT_STREAM_CONSUMER_KEY": {
-      "description": "A consumer key whitelisted for the Account Activity API."
+      "description": "A consumer key whitelisted for the Account Activity API.",
+      "value": "<dummy>"
     },
     "TWITTER_EVENT_STREAM_CONSUMER_SECRET": {
-      "description": "A consumer secret."
+      "description": "A consumer secret.",
+      "value": "<dummy>"
     },
     "TWITTER_EVENT_STREAM_USER_1": {
       "description": "A JSON object containing credentials for an user '1'.",

@@ -1,33 +1,16 @@
 require "json"
-require "net/http"
-require "simple_oauth"
+require_relative "oauth"
 
 if ARGV.size != 2
   STDERR.puts "Usage: ruby setup-oauth.rb <consumer key> <consumer secret>"
   exit 1
 end
 
-def oauth_post(path, params, oauth)
-  body = params.map { |k, v| "#{k}=#{v}" }.join("&")
-
-  uri = URI.parse("https://api.twitter.com#{path}")
-  auth = SimpleOAuth::Header.new(:post, uri.to_s, params, oauth).to_s
-
-  Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http|
-    res = http.post(path, body, { "Authorization" => auth })
-    if res.code != "200"
-      raise "request failed: path=#{path} code=#{res.code} body=#{res.body}"
-    end
-    res.body
-  }
-end
-
-
 oauth_opts = { consumer_key: ARGV[0], consumer_secret: ARGV[1] }
 
 puts "#POST /oauth/request_token"
-authorize_params = oauth_post("/oauth/request_token",
-                              { "oauth_callback" => "oob" }, oauth_opts)
+authorize_params = OAuthHelpers.user_post(oauth_opts, "/oauth/request_token",
+                                          { "oauth_callback" => "oob" })
 extracted = authorize_params.split("&").map { |v| v.split("=") }.to_h
 oauth_opts[:token] = extracted["oauth_token"]
 oauth_opts[:token_secret] = extracted["oauth_token_secret"]
@@ -41,8 +24,8 @@ pin = STDIN.gets.chomp
 puts
 
 puts "#POST /oauth/access_token"
-oauth_params = oauth_post("/oauth/access_token",
-                          { "oauth_verifier" => pin }, oauth_opts)
+oauth_params = OAuthHelpers.user_post(oauth_opts, "/oauth/access_token",
+                                      { "oauth_verifier" => pin })
 puts "#=> #{oauth_params}"
 puts
 

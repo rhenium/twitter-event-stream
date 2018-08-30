@@ -1,6 +1,5 @@
 require "json"
-require "net/http"
-require "simple_oauth"
+require_relative "oauth"
 
 class ServiceError < StandardError; end
 
@@ -9,21 +8,89 @@ class Service
     private :new
 
     def setup
-      aa_consumer_key = ENV["TWITTER_EVENT_STREAM_CONSUMER_KEY"]
-      aa_consumer_secret = ENV["TWITTER_EVENT_STREAM_CONSUMER_SECRET"]
+      consumer_key = ENV["TWITTER_EVENT_STREAM_CONSUMER_KEY"]
+      consumer_secret = ENV["TWITTER_EVENT_STREAM_CONSUMER_SECRET"]
 
-      @users = {}
+      user_objs = []
       ENV.each { |k, v|
         next unless k.start_with?("TWITTER_EVENT_STREAM_USER_")
-        obj = JSON.parse(v, symbolize_names: true)
-        @users[obj.fetch(:user_id)] = new(
-          consumer_key: aa_consumer_key,
-          consumer_secret: aa_consumer_secret,
-          **obj,
-        )
-
-        # TODO: Add to the webhook if needed
+        user_objs << JSON.parse(v, symbolize_names: true)
       }
+
+      # We assume the webapp is already started at this point: the CRC requires
+      # GET /webhook to respond
+      app_url = ENV["TWITTER_EVENT_STREAM_BASE_URL"]
+      aa_env_name = ENV["TWITTER_EVENT_STREAM_ENV_NAME"]
+      setup_webhook(app_url, aa_env_name, consumer_key, consumer_secret,
+                    user_objs)
+
+      @users = {}
+      user_objs.each { |obj|
+        @users[obj.fetch(:user_id)] = new(
+          user_id: obj.fetch(:user_id),
+          requests_per_window: obj.fetch(:requests_per_window),
+          rest_oauth: {
+            consumer_key: obj.fetch(:rest_consumer_key) {
+              consumer_key },
+            consumer_secret: obj.fetch(:rest_consumer_secret) {
+              consumer_secret },
+            token: obj.fetch(:rest_token) {
+              obj.fetch(:token) },
+            token_secret: obj.fetch(:rest_token_secret) {
+              obj.fetch(:token_secret) }
+          },
+        )
+      }
+    end
+
+    private def setup_webhook(app_url, env_name, consumer_key, consumer_secret,
+                              user_objs)
+      oauth = proc { |n|
+        {
+          consumer_key: consumer_key,
+          consumer_secret: consumer_secret,
+          token: user_objs.dig(n, :token),
+          token_secret: user_objs.dig(n, :token_secret),
+        }
+      }
+
+      if user_objs.empty?
+        warn "setup_webhook: no users configured. cannot setup webhook"
+        return
+      end
+
+      warn "setup_webhook: get existing webhook URL(s)"
+      app_token = OAuthHelpers.bearer_request_token(oauth[0])
+      body = OAuthHelpers.bearer_get(app_token,
+                                     "/1.1/account_activity/all/webhooks.json")
+      obj = JSON.parse(body, symbolize_names: true)
+      env = obj.dig(:environments).find { |v| v[:environment_name] == env_name }
+
+      warn "setup_webhook: clear existing webhook URL(s)"
+      env[:webhooks].each do |webhook|
+        warn "setup_webhook: delete id=#{webhook[:id]}: #{webhook[:url]}"
+        path = "/1.1/account_activity/all/#{env_name}/webhooks/" \
+          "#{webhook[:id]}.json"
+        OAuthHelpers.user_delete(oauth[0], path)
+      end
+
+      warn "setup_webhook: register a webhook URL"
+      webhook_url = app_url + (app_url.end_with?("/") ? "" : "/") + "webhook"
+      path = "/1.1/account_activity/all/#{env_name}/webhooks.json?url=" +
+        CGI.escape(webhook_url)
+      webhook = OAuthHelpers.user_post(oauth[0], path)
+      warn "setup_webhook: => #{webhook}"
+
+      warn "setup_webhook: add subscriptions"
+      user_objs.each_with_index { |_, n|
+        warn "setup_webhook: add subscription for " \
+          "user_id=#{user_objs.dig(n, :user_id)}"
+        path = "/1.1/account_activity/all/#{env_name}/subscriptions.json"
+        OAuthHelpers.user_post(oauth[n], path)
+      }
+    rescue => e
+      warn "setup_webhook: uncaught exception: #{e.class} (#{e.message})"
+      warn e.backtrace
     end
 
     def oauth_echo(asp, vca)
@@ -31,19 +98,19 @@ class Service
         raise ServiceError, "invalid OAuth Echo parameters"
       end
 
-      uri = URI.parse(asp)
-      Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http|
-        res = http.get(uri.path, { "Authorization" => vca })
-        raise ServiceError, "OAuth Echo failed" if res.code != "200"
-        content = JSON.parse(res.body)
-        get(content["id"])
-      }
+      begin
+        body = OAuthHelpers.http_get(vca, asp)
+        content = JSON.parse(body, symbolize_names: true)
+        get(content[:id])
+      rescue OAuthHelpers::HTTPRequestError
+        raise ServiceError, "OAuth Echo failed"
+      end
     end
 
     def feed_webhook(json)
       hash = JSON.parse(json)
       if user_id = hash["for_user_id"]
-        service = get(user_id)
+        service = get(Integer(user_id))
         service.feed_webhook(hash)
       else
         warn "FIXME\n#{hash}"
@@ -53,7 +120,7 @@ class Service
     private
 
     def get(user_id)
-      @users[user_id] or
+      defined?(@users) and @users[user_id] or
         raise ServiceError, "unauthenticated user: #{user_id}"
     end
   end
@@ -62,28 +129,10 @@ class Service
 
   def initialize(user_id:,
                  requests_per_window:,
-                 consumer_key:,
-                 consumer_secret:,
-                 token:,
-                 token_secret:,
-                 rest_consumer_key: consumer_key,
-                 rest_consumer_secret: consumer_secret,
-                 rest_token: token,
-                 rest_token_secret: token_secret)
+                 rest_oauth:)
     @user_id = user_id
     @requests_per_window = Integer(requests_per_window)
-    @aa_oauth = {
-      consumer_key: consumer_key,
-      consumer_secret: consumer_secret,
-      token: token,
-      token_secret: token_secret,
-    }
-    @rest_oauth = {
-      consumer_key: rest_consumer_key,
-      consumer_secret: rest_consumer_secret,
-      token: rest_token,
-      token_secret: rest_token_secret,
-    }
+    @rest_oauth = rest_oauth
     @listeners = {}
     @backfill = []
     start_polling
@@ -107,18 +156,10 @@ class Service
   end
 
   def twitter_get(path, params)
-    path += "?" + params.map { |k, v| "#{k}=#{v}" }.join("&") if !params.empty?
-    uri = URI.parse("https://api.twitter.com#{path}")
-    auth = SimpleOAuth::Header.new(:get, uri.to_s, {}, @rest_oauth).to_s
-
-    Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http|
-      res = http.get(path, { "Authorization" => auth })
-      if res.code != "200"
-        # pp res.each_header.to_h
-        raise ServiceError, "API request failed: path=#{path} body=#{res.body}"
-      end
-      JSON.parse(res.body)
-    }
+    JSON.parse(OAuthHelpers.user_get(@rest_oauth, path, params))
+  rescue OAuthHelpers::HTTPRequestError => e
+    # pp e.res.each_header.to_h
+    raise ServiceError, "API request failed: path=#{path} body=#{e.res.body}"
   end
 
   private

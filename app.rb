@@ -60,7 +60,7 @@ class App < Sinatra::Base
       when "twitter_event_stream_message"
       when "tweet_create_events"
         queue << data.map { |object| JSON.generate(object) }.join("\r\n")
-      when "favorites_events"
+      when "favorite_events"
         queue << data.map { |object|
           JSON.generate({
             "event" => "favorite",
